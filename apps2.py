@@ -4,11 +4,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+import warnings
+
+# Mengabaikan warning scikit-learn agar tampilan terminal rapi
+warnings.filterwarnings('ignore')
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Analisis Pelanggan Mall", layout="wide")
 
-# --- STYLE CSS (Agar tampilan lebih rapi) ---
+# --- STYLE CSS ---
 st.markdown("""
     <style>
     .main {
@@ -18,17 +22,14 @@ st.markdown("""
         background-color: #ffffff;
         padding: 15px;
         border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);        color: #000000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .stMetric * {
-        color: #000000 !important;    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- FUNGSI LOAD DATA ---
 @st.cache_data
 def load_data():
-    # Pastikan file Mall_Customers.csv sudah kamu upload ke GitHub
     try:
         df = pd.read_csv("Mall_Customers.csv")
         df.columns = ['ID', 'Gender', 'Usia', 'Pendapatan_Tahunan', 'Skor_Pengeluaran']
@@ -44,16 +45,15 @@ if df is not None:
     st.sidebar.header("⚙️ Pengaturan Model")
     k_value = st.sidebar.slider("Pilih Jumlah Kelompok (Cluster):", 2, 10, 5)
     
-    st.title("🛍️ Aplikasi Segmentasi Pelanggan Mall")
-    st.info("Aplikasi ini mengelompokkan pelanggan berdasarkan pendapatan dan perilaku belanja mereka.")
+    st.title("🛍️ Aplikasi Segmentasi & Prediksi Pelanggan Mall")
+    st.info("Aplikasi ini mengelompokkan pelanggan berdasarkan pendapatan dan perilaku belanja, serta dapat memprediksi segmen pelanggan baru.")
 
-    # --- PROSES CLUSTERING ---
+    # --- PROSES CLUSTERING (TRAINING MODEL) ---
     X = df[['Pendapatan_Tahunan', 'Skor_Pengeluaran']]
     
     model_kmeans = KMeans(n_clusters=k_value, init='k-means++', random_state=42)
     df['Cluster'] = model_kmeans.fit_predict(X)
     
-    # Perhitungan "Akurasi" (Silhouette Score)
     score = silhouette_score(X, df['Cluster'])
 
     # --- BAGIAN 1: METRIK UTAMA ---
@@ -65,13 +65,12 @@ if df is not None:
     with col2:
         st.metric("Jumlah Cluster (K)", k_value)
     with col3:
-        # Silhouette score: Makin mendekati 1 makin bagus pemisahannya
         st.metric("Skor Silhouette (Akurasi)", f"{score:.3f}")
         st.caption("ℹ️ Skor mendekati 1.0 berarti pengelompokan sangat baik.")
 
     st.divider()
 
-    # --- BAGIAN 2: VISUALISASI ---
+    # --- BAGIAN 2: VISUALISASI & SPREAD ---
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
@@ -95,8 +94,7 @@ if df is not None:
 
     with col_right:
         st.subheader("📑 Tabel Sebaran (Spread)")
-        st.write("Rata-rata tiap kelompok:")
-        # Menghitung profil tiap cluster
+        st.write("Rata-rata karakteristik tiap kelompok:")
         spread = df.groupby('Cluster').agg({
             'Pendapatan_Tahunan': 'mean',
             'Skor_Pengeluaran': 'mean',
@@ -106,11 +104,43 @@ if df is not None:
         
         st.dataframe(spread, use_container_width=True)
 
-    # --- BAGIAN 3: ANALISIS DATA ---
-    st.subheader("🔍 Data Detail per Cluster")
-    with st.expander("Klik untuk melihat daftar pelanggan berdasarkan cluster"):
-        pilihan_cluster = st.selectbox("Pilih Cluster untuk dilihat detailnya:", range(k_value))
+    st.divider()
+
+    # --- BAGIAN 3: PREDIKSI PELANGGAN BARU ---
+    st.subheader("🔮 Prediksi Segmen Pelanggan Baru")
+    st.write("Masukkan perkiraan pendapatan dan pengeluaran pelanggan baru untuk melihat ia masuk ke target pasar yang mana.")
+    
+    # Membuat form inputan
+    col_input1, col_input2 = st.columns(2)
+    with col_input1:
+        input_pendapatan = st.number_input("Pendapatan Tahunan (k$)", min_value=0, max_value=200, value=50, step=1)
+    with col_input2:
+        input_pengeluaran = st.number_input("Skor Pengeluaran (1-100)", min_value=1, max_value=100, value=50, step=1)
+
+    # Tombol Prediksi
+    if st.button("Lakukan Prediksi", type="primary"):
+        # Siapkan data baru untuk diprediksi
+        data_baru = pd.DataFrame({
+            'Pendapatan_Tahunan': [input_pendapatan],
+            'Skor_Pengeluaran': [input_pengeluaran]
+        })
+        
+        # Eksekusi prediksi menggunakan model K-Means yang sudah dilatih
+        prediksi_cluster = model_kmeans.predict(data_baru)[0]
+        
+        # Tampilkan Hasil
+        st.success(f"🎉 **Hasil:** Pelanggan ini masuk ke dalam **Cluster {prediksi_cluster}**")
+        
+        # Tarik data rata-rata dari tabel spread untuk menjelaskan cluster tersebut
+        rata_pend = spread.loc[prediksi_cluster, 'Pendapatan_Tahunan']
+        rata_peng = spread.loc[prediksi_cluster, 'Skor_Pengeluaran']
+        
+        st.info(f"💡 **Info Cluster {prediksi_cluster}:** Kelompok ini rata-rata memiliki Pendapatan **{rata_pend}k $** dan Skor Pengeluaran **{rata_peng}**.")
+
+    st.divider()
+
+    # --- BAGIAN 4: DATA DETAIL ---
+    with st.expander("Klik untuk melihat detail data pelanggan"):
+        pilihan_cluster = st.selectbox("Pilih Cluster:", range(k_value))
         data_filtered = df[df['Cluster'] == pilihan_cluster]
         st.dataframe(data_filtered, use_container_width=True)
-
-    st.success("✅ Aplikasi Berhasil Dijalankan. Silakan screenshot halaman ini untuk laporan Anda.")
