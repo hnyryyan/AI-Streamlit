@@ -18,8 +18,10 @@ st.markdown("""
         background-color: #ffffff;
         padding: 15px;
         border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);        color: #000000;
     }
+    .stMetric * {
+        color: #000000 !important;    }
     </style>
     """, unsafe_allow_html=True)
 
