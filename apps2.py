@@ -10,9 +10,8 @@ st.set_page_config(page_title="Customer Segmentation App", layout="wide")
 # 1. Load Data
 @st.cache_data
 def load_data():
-    # Menggunakan link raw dataset Mall Customer
-    url = "https://raw.githubusercontent.com/stephi-ng/Mall-Customer-Segmentation-Analysis/master/Mall_Customers.csv"
-    df = pd.read_csv(url)
+   # Baca langsung dari file CSV yang sudah di-upload ke GitHub
+    df = pd.read_csv("Mall_Customers.csv")
     # Merubah nama kolom agar lebih mudah diakses
     df.columns = ['CustomerID', 'Gender', 'Age', 'Annual_Income', 'Spending_Score']
     return df
