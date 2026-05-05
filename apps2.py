@@ -3,81 +3,112 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
-# Konfigurasi Halaman
-st.set_page_config(page_title="Customer Segmentation App", layout="wide")
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(page_title="Analisis Pelanggan Mall", layout="wide")
 
-# 1. Load Data
+# --- STYLE CSS (Agar tampilan lebih rapi) ---
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7f9;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- FUNGSI LOAD DATA ---
 @st.cache_data
 def load_data():
-   # Baca langsung dari file CSV yang sudah di-upload ke GitHub
-    df = pd.read_csv("Mall_Customers.csv")
-    # Merubah nama kolom agar lebih mudah diakses
-    df.columns = ['CustomerID', 'Gender', 'Age', 'Annual_Income', 'Spending_Score']
-    return df
+    # Pastikan file Mall_Customers.csv sudah kamu upload ke GitHub
+    try:
+        df = pd.read_csv("Mall_Customers.csv")
+        df.columns = ['ID', 'Gender', 'Usia', 'Pendapatan_Tahunan', 'Skor_Pengeluaran']
+        return df
+    except:
+        st.error("File 'Mall_Customers.csv' tidak ditemukan. Pastikan sudah diupload ke GitHub!")
+        return None
 
 df = load_data()
 
-# Sidebar
-st.sidebar.title("Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["Dataset Explorer", "Customer Segmentation"])
-
-if page == "Dataset Explorer":
-    st.title("🛍️ Mall Customer Dataset Explorer")
-    st.write("Dataset ini digunakan untuk memahami segmentasi pelanggan di sebuah Mall.")
+if df is not None:
+    # --- SIDEBAR ---
+    st.sidebar.header("⚙️ Pengaturan Model")
+    k_value = st.sidebar.slider("Pilih Jumlah Kelompok (Cluster):", 2, 10, 5)
     
-    st.dataframe(df, use_container_width=True)
-    
-    st.subheader("Statistik Deskriptif")
-    st.write(df.describe())
+    st.title("🛍️ Aplikasi Segmentasi Pelanggan Mall")
+    st.info("Aplikasi ini mengelompokkan pelanggan berdasarkan pendapatan dan perilaku belanja mereka.")
 
-    # Visualisasi Distribusi
-    col1, col2 = st.columns(2)
+    # --- PROSES CLUSTERING ---
+    X = df[['Pendapatan_Tahunan', 'Skor_Pengeluaran']]
+    
+    model_kmeans = KMeans(n_clusters=k_value, init='k-means++', random_state=42)
+    df['Cluster'] = model_kmeans.fit_predict(X)
+    
+    # Perhitungan "Akurasi" (Silhouette Score)
+    score = silhouette_score(X, df['Cluster'])
+
+    # --- BAGIAN 1: METRIK UTAMA ---
+    st.subheader("📊 Ringkasan Model")
+    col1, col2, col3 = st.columns(3)
+    
     with col1:
-        st.write("### Distribusi Usia")
-        fig, ax = plt.subplots()
-        sns.histplot(df['Age'], kde=True, ax=ax, color='skyblue')
-        st.pyplot(fig)
+        st.metric("Total Data Pelanggan", f"{len(df)} orang")
     with col2:
-        st.write("### Gender")
-        fig, ax = plt.subplots()
-        df['Gender'].value_counts().plot.pie(autopct='%1.1f%%', ax=ax)
+        st.metric("Jumlah Cluster (K)", k_value)
+    with col3:
+        # Silhouette score: Makin mendekati 1 makin bagus pemisahannya
+        st.metric("Skor Silhouette (Akurasi)", f"{score:.3f}")
+        st.caption("ℹ️ Skor mendekati 1.0 berarti pengelompokan sangat baik.")
+
+    st.divider()
+
+    # --- BAGIAN 2: VISUALISASI ---
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        st.subheader("📍 Visualisasi Sebaran Cluster")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.scatterplot(
+            data=df, x='Pendapatan_Tahunan', y='Skor_Pengeluaran', 
+            hue='Cluster', palette='bright', s=100, ax=ax, alpha=0.7
+        )
+        # Gambar titik tengah (Centroids)
+        plt.scatter(
+            model_kmeans.cluster_centers_[:, 0], 
+            model_kmeans.cluster_centers_[:, 1], 
+            s=300, c='black', marker='X', label='Pusat Kelompok'
+        )
+        plt.title("Grafik Pendapatan vs Skor Pengeluaran")
+        plt.xlabel("Pendapatan Tahunan (k$)")
+        plt.ylabel("Skor Pengeluaran (1-100)")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         st.pyplot(fig)
 
-elif page == "Customer Segmentation":
-    st.title("🎯 Customer Segmentation (K-Means Clustering)")
-    
-    # Memilih fitur untuk clustering
-    X = df[['Annual_Income', 'Spending_Score']]
-    
-    # Input jumlah cluster
-    st.sidebar.subheader("Pengaturan Model")
-    clusters = st.sidebar.slider("Pilih Jumlah Cluster (K):", 2, 10, 5)
-    
-    # Jalankan K-Means
-    kmeans = KMeans(n_clusters=clusters, random_state=42, n_init=10)
-    df['Cluster'] = kmeans.fit_predict(X)
-    
-    # Visualisasi Cluster
-    st.write(f"### Visualisasi {clusters} Segmen Pelanggan")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.scatterplot(data=df, x='Annual_Income', y='Spending_Score', hue='Cluster', 
-                    palette='viridis', s=100, ax=ax)
-    plt.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], 
-                s=300, c='red', marker='X', label='Centroids')
-    plt.title("Annual Income vs Spending Score")
-    plt.legend()
-    st.pyplot(fig)
-    
-    st.success("Analisis Selesai! Anda bisa melihat pengelompokan pelanggan di atas.")
-    
-    # Penjelasan Segmen (Jika K=5)
-    if clusters == 5:
-        st.info("""
-        **Interpretasi Umum (K=5):**
-        - **Cluster 0:** Pendapatan Rendah, Pengeluaran Rendah.
-        - **Cluster 1:** Pendapatan Tinggi, Pengeluaran Rendah (Pelanggan Hemat).
-        - **Cluster 2:** Pendapatan Menengah, Pengeluaran Menengah.
-        - **Cluster 3:** Pendapatan Rendah, Pengeluaran Tinggi (Pelanggan Boros).
-        - **Cluster 4:** Pendapatan Tinggi, Pengeluaran Tinggi (Target Utama/Sultan).
-        """)
+    with col_right:
+        st.subheader("📑 Tabel Sebaran (Spread)")
+        st.write("Rata-rata tiap kelompok:")
+        # Menghitung profil tiap cluster
+        spread = df.groupby('Cluster').agg({
+            'Pendapatan_Tahunan': 'mean',
+            'Skor_Pengeluaran': 'mean',
+            'Usia': 'mean',
+            'ID': 'count'
+        }).rename(columns={'ID': 'Jumlah_Orang'}).round(1)
+        
+        st.dataframe(spread, use_container_width=True)
+
+    # --- BAGIAN 3: ANALISIS DATA ---
+    st.subheader("🔍 Data Detail per Cluster")
+    with st.expander("Klik untuk melihat daftar pelanggan berdasarkan cluster"):
+        pilihan_cluster = st.selectbox("Pilih Cluster untuk dilihat detailnya:", range(k_value))
+        data_filtered = df[df['Cluster'] == pilihan_cluster]
+        st.dataframe(data_filtered, use_container_width=True)
+
+    st.success("✅ Aplikasi Berhasil Dijalankan. Silakan screenshot halaman ini untuk laporan Anda.")
