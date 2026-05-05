@@ -106,7 +106,7 @@ if df is not None:
 
     st.divider()
 
-    # --- BAGIAN 3: PREDIKSI PELANGGAN BARU ---
+   # --- BAGIAN 3: PREDIKSI PELANGGAN BARU ---
     st.subheader("🔮 Prediksi Segmen Pelanggan Baru")
     st.write("Masukkan perkiraan pendapatan dan pengeluaran pelanggan baru untuk melihat ia masuk ke target pasar yang mana.")
     
@@ -125,17 +125,30 @@ if df is not None:
             'Skor_Pengeluaran': [input_pengeluaran]
         })
         
-        # Eksekusi prediksi menggunakan model K-Means yang sudah dilatih
+        # Eksekusi prediksi cluster
         prediksi_cluster = model_kmeans.predict(data_baru)[0]
+        
+        # MENGHITUNG PERSENTASE KECOCOKAN (CONFIDENCE/SIMILARITY)
+        # Menghitung jarak titik baru ke semua pusat cluster
+        jarak_ke_centroid = model_kmeans.transform(data_baru)[0]
+        
+        # Mengubah jarak menjadi persentase (semakin kecil jarak = semakin besar persentase)
+        # Ditambah 1e-10 untuk menghindari error pembagian dengan nol
+        kecocokan = 1 / (jarak_ke_centroid + 1e-10) 
+        persentase_kecocokan = (kecocokan / kecocokan.sum()) * 100
+        persentase_terpilih = persentase_kecocokan[prediksi_cluster]
         
         # Tampilkan Hasil
         st.success(f"🎉 **Hasil:** Pelanggan ini masuk ke dalam **Cluster {prediksi_cluster}**")
+        
+        # Menampilkan persentase kecocokan dengan metrik
+        st.metric(label="Tingkat Kecocokan dengan Cluster Ini", value=f"{persentase_terpilih:.2f}%")
         
         # Tarik data rata-rata dari tabel spread untuk menjelaskan cluster tersebut
         rata_pend = spread.loc[prediksi_cluster, 'Pendapatan_Tahunan']
         rata_peng = spread.loc[prediksi_cluster, 'Skor_Pengeluaran']
         
-        st.info(f"💡 **Info Cluster {prediksi_cluster}:** Kelompok ini rata-rata memiliki Pendapatan **{rata_pend}k $** dan Skor Pengeluaran **{rata_peng}**.")
+        st.info(f"💡 **Penjelasan:** Pelanggan ini memiliki kemiripan karakteristik sebesar **{persentase_terpilih:.2f}%** dengan rata-rata orang di Cluster {prediksi_cluster} (Pendapatan ~{rata_pend}k $ dan Skor Pengeluaran ~{rata_peng}).")
 
     st.divider()
 
